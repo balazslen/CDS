@@ -1,0 +1,80 @@
+# MAIN CDS app
+import pandas as pd
+from function_library import has_med_record, set_ecm_tag, ecm_tag_exist, format_tags_for_output
+
+
+def main():
+    # File paths
+    patient_records_path = 'venv/patient_records/patient_records.csv'
+    output_tags_path = 'venv/output_files/patient_tags_output.csv'
+    tag_dictionary_path = 'venv/dictionaries/patient_tag_dictionary.csv'  # Path to the tag dictionary
+
+    # Variables
+    ecm_cad_alert = ""
+
+    # Load patient data
+    patient_df = pd.read_csv(patient_records_path)
+    patient_df['date'] = pd.to_datetime(patient_df['date'])
+    print(patient_df.head())
+    print(patient_df.columns)  # This will list all columns in the DataFrame
+
+    #Load tags from the dictionary
+    tag_dictionary_df = pd.read_csv(tag_dictionary_path)
+    tags = tag_dictionary_df['tagname'].tolist()  # Assuming the column is named 'tagname'
+
+    # Initialize a DataFrame for tagging
+    tag_df = pd.DataFrame({'patient_id': patient_df['patient_id'].unique()})
+    for tag in tags:
+        tag_df[tag] = False
+    tag_df.set_index('patient_id', inplace=True)
+
+    # Apply GENERAL_ADULT tag based on age criteria
+    tag_df['GENERAL_ADULT'] = ((patient_df.groupby('patient_id')['age'].mean() >= 18) &
+                               (patient_df.groupby('patient_id')['age'].mean() < 90))
+
+    # Pre-compute conditions for the entire DataFrame
+    acute_coronary_condition = has_med_record(patient_df, 'ACUTE_CORONARY_SYNDROME', 2, 183)
+    p2y12_condition = has_med_record(patient_df, 'P2Y12_INHIBITOR', 1, 183)
+    acute_renal_failure_condition = has_med_record(patient_df, 'ACUTE_RENAL_FAILURE', 1, 730)
+    print("Patients meeting the ACUTE_CORONARY_SYNDROME condition:")
+    for patient_id, condition_met in acute_coronary_condition.items():
+        if condition_met:
+            print(patient_id)
+    #print(p2y12_condition)
+    #print(acute_renal_failure_condition)
+
+    # Process further conditions
+    for patient_id in tag_df.index:
+        # Set the CAD_D1
+        if ecm_tag_exist(tag_df, patient_id, 'GENERAL_ADULT'):
+            if acute_coronary_condition.get(patient_id, False):
+                set_ecm_tag(tag_df, patient_id, 'CAD_D1')
+                print(f"'CAD_D1' tag assigned to patient_id: {patient_id}")
+                # Check for CAD_O1 or CAD_N1
+                if ecm_tag_exist(tag_df, patient_id, 'CAD_D1'):
+                    if p2y12_condition.get(patient_id, False):
+                        set_ecm_tag(tag_df, patient_id, 'CAD_O1')
+                    else:
+                        set_ecm_tag(tag_df, patient_id, 'CAD_N1')
+
+                        # Check for CAD_N1X or CAD_N1A
+                        if ecm_tag_exist(tag_df, patient_id, 'CAD_N1'):
+                            if acute_renal_failure_condition.get(patient_id, False):
+                                set_ecm_tag(tag_df, patient_id, 'CAD_N1X')
+                            else:
+                                set_ecm_tag(tag_df, patient_id, 'CAD_N1A')
+
+                                # Check for CAD_N1A and set alert
+                                if ecm_tag_exist(tag_df, patient_id, 'CAD_N1A'):
+                                    ecm_cad_alert = "Your alert message here"
+
+    # Format and save the final output
+    final_output_df = format_tags_for_output(tag_df)
+    final_output_df.to_csv(output_tags_path, index=False)
+
+    # Optional: return or print the alert message
+    return ecm_cad_alert
+
+
+if __name__ == '__main__':
+    main()
