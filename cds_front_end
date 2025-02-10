@@ -1,0 +1,75 @@
+## Front end app and UI for CDS
+import sys
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem
+import pandas as pd
+import main  # Assuming your main application script is named 'main.py'
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Clinical Decision Support System")
+        self.setGeometry(100, 100, 600, 400)
+
+        layout = QVBoxLayout()
+
+        # Button to clear previous analysis
+        self.btn_clear = QPushButton('Clear Previous Analysis', self)
+        self.btn_clear.clicked.connect(self.clear_previous_analysis)
+        layout.addWidget(self.btn_clear)
+
+        # Button to run analysis
+        self.btn_run = QPushButton('Run Analysis', self)
+        self.btn_run.clicked.connect(self.run_analysis)
+        layout.addWidget(self.btn_run)
+
+        # Button to display analysis results
+        self.btn_display = QPushButton('Display Analysis Result', self)
+        self.btn_display.clicked.connect(self.display_analysis_result)
+        layout.addWidget(self.btn_display)
+
+        # Table to display the results
+        self.table_widget = QTableWidget(self)
+        self.table_widget.setColumnCount(3)
+        self.table_widget.setHorizontalHeaderLabels(["Tags", "Number of Patients", "Description"])
+        layout.addWidget(self.table_widget)
+
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
+
+    def clear_previous_analysis(self):
+        try:
+            print("Clearing analysis...")
+            df = pd.DataFrame(columns=['patient_id', 'ecm_tag', 'recent_date_assigned'])
+            df.to_csv('venv/output_files/patient_tags_output.csv', index=False)
+            print("Analysis cleared successfully.")
+        except Exception as e:
+            print("Error clearing analysis:", e)
+
+    def run_analysis(self):
+        # Run the main analysis from the main script
+        main.main()
+
+    def display_analysis_result(self):
+        try:
+            # Load the analysis results and display them in the table
+            output_df = pd.read_csv('venv/output_files/patient_tags_output.csv')
+            tags = output_df['ecm_tag'].str.split(', ').explode().unique()
+            tag_counts = output_df['ecm_tag'].str.split(', ').explode().value_counts()
+
+            self.table_widget.setRowCount(len(tags))
+            for i, tag in enumerate(tags):
+                self.table_widget.setItem(i, 0, QTableWidgetItem(tag))
+                self.table_widget.setItem(i, 1, QTableWidgetItem(str(tag_counts.get(tag, 0))))
+                self.table_widget.setItem(i, 2, QTableWidgetItem(""))  # Description column
+
+        except Exception as e:
+            print("Error displaying analysis results:", e)
+
+# Run the application
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    mainWin = MainWindow()
+    mainWin.show()
+    sys.exit(app.exec_())
