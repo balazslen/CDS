@@ -1,0 +1,47 @@
+##function library of different reusable functions for CDS
+import pandas as pd
+#from datetime import datetime, timedelta
+
+
+def has_med_record(df, code_category, code_number, timeframe):
+    # Convert 'date' column to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+
+    # Calculate the cutoff date
+    cutoff_date = pd.Timestamp.today() - pd.Timedelta(days=timeframe)
+
+    # Filter records for the specified code category and timeframe
+    filtered_records = df[(df['code_category'] == code_category) & (df['date'] >= cutoff_date)]
+
+    # Group by patient_id and count the occurrences of the code category
+    patient_counts = filtered_records.groupby('patient_id').size()
+
+    # Create a Series to store whether each patient meets the condition
+    condition_met = patient_counts >= code_number
+
+    return condition_met
+
+
+def set_ecm_tag(tag_df, patient_id, tag):
+    if patient_id in tag_df.index:
+        tag_df.at[patient_id, tag] = True
+# Sets a specified tag for a patient in the tag DataFrame.
+
+
+def ecm_tag_exist(tag_df, patient_id, tag):
+    return tag_df.at[patient_id, tag] if patient_id in tag_df.index else False
+# Checks if a specific tag exists for a patient
+
+
+def format_tags_for_output(tag_df):
+    formatted_tags = tag_df.apply(lambda row: ', '.join(row.index[row]), axis=1)
+    final_output_df = pd.DataFrame({'patient_id': tag_df.index, 'ecm_tag': formatted_tags})
+
+    # Format the current date as YYYY-MM-DD
+    current_date_formatted = pd.Timestamp.today().strftime('%Y-%m-%d')
+
+    # Assign this formatted date to the 'recent_date_assigned' column
+    final_output_df['recent_date_assigned'] = current_date_formatted
+
+    return final_output_df
+# Prepares the final DataFrame for output, formatting the tags as a comma-separated string
